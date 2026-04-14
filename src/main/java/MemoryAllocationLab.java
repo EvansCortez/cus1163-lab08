@@ -30,31 +30,35 @@ public class MemoryAllocationLab {
     static int successfulAllocations = 0;
     static int failedAllocations = 0;
 
-    public static void processRequests(String filename) {
-        memory = new ArrayList<>();
+public static void processRequests(String filename) {
+        memory = new ArrayList<MemoryBlock>();
 
+        // Use try-with-resources to handle file reading safely
         try (BufferedReader br = new BufferedReader(new FileReader(filename))) {
             String line = br.readLine();
             if (line != null) {
                 totalMemory = Integer.parseInt(line.trim());
+                // Initialize memory with one large free block
+                memory.add(new MemoryBlock(0, totalMemory, null));
                 System.out.println("Total Memory: " + totalMemory + " KB");
                 System.out.println("----------------------------------------");
                 System.out.println("\nProcessing requests...\n");
-                memory.add(new MemoryBlock(0, totalMemory, null));
             }
+
             while ((line = br.readLine()) != null) {
                 line = line.trim();
                 if (line.isEmpty()) continue;
+
                 String[] parts = line.split("\\s+");
-                if (parts.length >= 2) {
-                    String command = parts[0];
-                    String processName = parts[1];
-                    if (command.equals("REQUEST") && parts.length >= 3) {
-                        int size = Integer.parseInt(parts[2]);
-                        allocate(processName, size);
-                    } else if (command.equals("RELEASE")) {
-                        deallocate(processName);
-                    }
+                String command = parts[0];
+
+                if (command.equals("REQUEST")) {
+                    String pName = parts[1];
+                    int pSize = Integer.parseInt(parts[2]);
+                    allocate(pName, pSize);
+                } else if (command.equals("RELEASE")) {
+                    String pName = parts[1];
+                    deallocate(pName);
                 }
             }
         } catch (IOException e) {
@@ -66,19 +70,25 @@ public class MemoryAllocationLab {
     private static void allocate(String processName, int size) {
         for (int i = 0; i < memory.size(); i++) {
             MemoryBlock block = memory.get(i);
+            
+            // First-Fit: Use the first free block that is large enough
             if (block.isFree() && block.size >= size) {
-                block.processName = processName;
+                // Split the block if it's larger than needed
                 if (block.size > size) {
                     int remainingSize = block.size - size;
+                    // New free block starts after the allocated portion
+                    MemoryBlock newFreeBlock = new MemoryBlock(block.start + size, remainingSize, null);
                     block.size = size;
-                    MemoryBlock newBlock = new MemoryBlock(block.start + size, remainingSize, null);
-                    memory.add(i + 1, newBlock);
+                    memory.add(i + 1, newFreeBlock);
                 }
+                
+                block.processName = processName;
                 successfulAllocations++;
                 System.out.println("REQUEST " + processName + " " + size + " KB → SUCCESS");
                 return;
             }
         }
+        
         failedAllocations++;
         System.out.println("REQUEST " + processName + " " + size + " KB → FAILED (insufficient memory)");
     }
